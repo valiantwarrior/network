@@ -17,7 +17,7 @@ def main() :
     
     try :
         while True:
-            data, client_addr = sock.recvfrom(1024)
+            data, client_addr = sock.recvfrom(64)
             print ("Server: recv \"" + data.decode('utf-8') + "\"")
             time.sleep(1.0)
             sock.sendto(data, client_addr)

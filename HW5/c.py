@@ -10,7 +10,7 @@ import time
 server_ip = "127.0.0.1"
 server_port = 24220
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.settimeout(0.9)
+sock.settimeout(0.99)
 packet_queue = queue.Queue()
 receive_queue = queue.Queue()
 
@@ -21,8 +21,12 @@ def help_for_cmd() :
     print("-p < Port number > : Set Port number of the UDP ping server. If not specified, default is 24220.")
     print("-w < timeout(ms) > : Set the timeout time. If not specified, default is 1000ms.")
 
-def print_result() :
-    pass
+def print_result(result) :
+    if result.qsize() != 0 :
+        print("Waste : ", result.qsize())
+        while result.qsize() != 0 :
+            data = result.get_nowait()
+            print(data)
 
 # define command line argument
 def setup_with_command() :
@@ -57,21 +61,23 @@ def send_to_server(_packet) :
     print("PING<{0}> sent".format(_packet))
 
     
-
 # receive
-def receive_from_server(_packet) :
+def receive_from_server(have_to_receive) :
     try :
-        data, addr = sock.recvfrom(1024)
-        data = int(data.encode())
+        data, addr = sock.recvfrom(64)
+        data = int(data.decode())
+        print(data)
         receive_queue.put_nowait(data)
-        if data is not _packet :
+        
+        if data != have_to_receive :
+            print("PING<{0}> timeout!".format(have_to_receive))
             return False
 
         print("PING<{0}> reply received from <{1}> : RTT = <{2}>ms".format(data, addr[0], 10))
         return True
     
     except socket.timeout : 
-        print("PING<{0}> timeout!".format(_packet))
+        print("PING<{0}> timeout!".format(have_to_receive))
         return False
 
 # main
@@ -81,17 +87,20 @@ def main() :
         
         setup_with_command()
         init_packet()
-        
+
+        i = 0
         while True :
-            packet = packet_queue.get_nowait()
+            #packet = packet_queue.get_nowait()
+            packet = i
             send_to_server(packet)
             receive_from_server(packet)
-            if packet_queue.qsize() == 0 : 
-                break
-        print_result()
+            i += 1
+            
+        print_result(receive_queue)
         
         sock.close()
     except KeyboardInterrupt :
+        print_result(receive_queue)
         sock.close()
         print("\nBye~")
         sys.exit(1)
