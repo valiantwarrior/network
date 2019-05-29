@@ -12,7 +12,8 @@ server_port = 24220
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(0.99)
 packet_queue = queue.Queue()
-receive_queue = queue.Queue()
+receive_observer = []
+
 
 # command line argument is invalid, print guide for user
 def help_for_cmd() :
@@ -50,35 +51,47 @@ def setup_with_command() :
         sys.exit(1)
 
 
-# initialize packet_queue
+# initialize packet_queue & checker
 def init_packet() :
     for i in range(0,10) :
         packet_queue.put_nowait(i)
+        
+def init_receive_queue() :
+    for i in range(0,10) :
+        data = {"PACKET":i, "IS_RECEIVED" : None, "RTT":-1}
+        receive_observer.append(data)
 
 # send
 def send_to_server(_packet) :
     sock.sendto(str(_packet).encode(), (server_ip, server_port))
+    begin = time.clock()
     print("PING<{0}> sent".format(_packet))
 
+    return begin
     
 # receive
 def receive_from_server(have_to_receive) :
     try :
         data, addr = sock.recvfrom(64)
+        end = time.clock()
         data = int(data.decode())
-        print(data)
-        receive_queue.put_nowait(data)
         
-        if data != have_to_receive :
-            print("PING<{0}> timeout!".format(have_to_receive))
-            return False
-
         print("PING<{0}> reply received from <{1}> : RTT = <{2}>ms".format(data, addr[0], 10))
-        return True
+        return end
     
     except socket.timeout : 
         print("PING<{0}> timeout!".format(have_to_receive))
-        return False
+        return None
+
+def ping_simulation(_packet) :
+    begin = send_to_server(_packet)
+    end = receive_from_server(_packet)
+    
+    if end :
+        elapsed = end - begin    
+        target = receive_observer[_packet]
+        target["RTT"] = elapsed
+        target["IS_RECEIVED"] = True
 
 # main
 def main() :
@@ -87,7 +100,8 @@ def main() :
         
         setup_with_command()
         init_packet()
-
+        init_receive_queue()
+        
         i = 0
         while True :
             #packet = packet_queue.get_nowait()
@@ -96,7 +110,6 @@ def main() :
             receive_from_server(packet)
             i += 1
             
-        print_result(receive_queue)
         
         sock.close()
     except KeyboardInterrupt :
