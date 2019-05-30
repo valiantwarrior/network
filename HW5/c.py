@@ -10,8 +10,8 @@ import math
 
 server_ip = "127.0.0.1"
 server_port = 24220
-timeout = 1.0
-
+timeout = 2.5
+sent = 0
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(timeout)
 packet_queue = queue.Queue()
@@ -29,7 +29,7 @@ def help_for_cmd() :
 def print_result() :
     global receive_observer
     rtt_sum = 0
-    rtt_min = 9000
+    rtt_min = 30000
     rtt_max = 0
     received = 0
 
@@ -42,14 +42,17 @@ def print_result() :
                 rtt_min = target["RTT"]
             if target["RTT"] > rtt_max :
                 rtt_max = target["RTT"]
+    if rtt_min == 30000 :
+        rtt_min = 0
+    rtt_avg = round(rtt_sum / received) if received > 0 else 0
     print("<Overall Result>")
-    print("1. Ping sent         : ", 10)
+    print("1. Ping sent         : ", sent)
     print("2. Ping received     : ", received)
-    print("3. Ping lost         : ", 10-received)
-    print("4. Ping loss ratio   : ", (10-received) / 10)
+    print("3. Ping lost         : ", sent-received)
+    print("4. Ping loss ratio   : ", (sent-received) / sent)
     print("5. min RTT           : ", rtt_min)
     print("6. max RTT           : ", rtt_max)
-    print("7. avg RTT           : ", round(rtt_sum / received))
+    print("7. avg RTT           : ", rtt_avg)
 
 
 # define command line argument
@@ -86,14 +89,19 @@ def init_receive_queue() :
 
 # send
 def send_to_server(_packet) :
+    global sent
     sock.sendto(str(_packet).encode(), (server_ip, server_port))
     begin = time.time()
+    
+    sent += 1
     print("PING<{0}> sent".format(_packet))
+   
 
     return begin
     
 # receive
 def receive_from_server(have_to_receive, begin) :
+    
     try :
         data, addr = sock.recvfrom(64)
         end = time.time()
@@ -106,6 +114,9 @@ def receive_from_server(have_to_receive, begin) :
             target["IS_RECEIVED"] = True
             print("PING<{0}> reply received from <{1}> : RTT = <{2}>ms".format(data, addr[0], target["RTT"]))
             return True
+        
+        else : 
+            return False
     
     except socket.timeout : 
 
@@ -136,6 +147,9 @@ def ping_simulation(_packet) :
     if is_received is False :
         receive_clear(_packet)
 
+def end_ping_test() :
+    sock.sendto("".encode(), (server_ip, server_port))
+
 # main
 def main() :
 
@@ -150,12 +164,14 @@ def main() :
                 packet = packet_queue.get_nowait()
             except queue.Empty :
                 break
-            
             ping_simulation(packet)   
+        end_ping_test()
         sock.close()
         print_result()
     except KeyboardInterrupt :
+        sock.sendto("".encode(), (server_ip, server_port))
         sock.close()
+        print_result()
         print("\nBye~")
         sys.exit(1)
 
